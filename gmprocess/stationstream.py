@@ -195,7 +195,9 @@ class StationStream(Stream):
             for tr in self:
                 stats = tr.stats
                 all_codes.append(
-                    "%s.%s.%s" % (stats.network, stats.station, stats.channel))
+                    "%s.%s.%s.%s" % (stats.network, stats.station,
+                                     stats.channel,
+                                     stats.format_specific['physical_units']))
             if len(set(all_codes)) != len(all_codes):
                 for tr in self:
                     tr.fail('Nonunique channel code in StationStream.')

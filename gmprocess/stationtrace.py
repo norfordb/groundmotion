@@ -17,11 +17,10 @@ import pandas as pd
 # local imports
 from gmprocess._version import get_versions
 from gmprocess.config import get_config
-from gmprocess.io.seedname import get_units_type
 
-UNITS = {'acc': 'cm/s^2',
+UNITS = {'acc': 'cm/s/s',
          'vel': 'cm/s'}
-REVERSE_UNITS = {'cm/s^2': 'acc',
+REVERSE_UNITS = {'cm/s/s': 'acc',
                  'cm/s': 'vel'}
 
 PROCESS_LEVELS = {'V0': 'raw counts',
@@ -99,11 +98,6 @@ STANDARD_KEYS = {
         'default': np.nan
     },
     'units': {
-        'type': str,
-        'required': True,
-        'default': ''
-    },
-    'units_type': {
         'type': str,
         'required': True,
         'default': ''
@@ -269,19 +263,16 @@ class StationTrace(Trace):
         """
         # here's something we thought obspy would do...
         # verify that npts matches length of data
-        if self.stats.npts != len(self.data):
-            raise ValueError(
-                'Number of points in header does not match the number of '
-                'points in the data.'
-            )
-
-        if 'remove_response' not in self.getProvenanceKeys():
-            self.stats.standard.units = 'raw counts'
-        else:
-            self.stats.standard.units = REVERSE_UNITS[
-                self.getProvenance('remove_response')[0]['output_units']]
+        if self.stats.standard['process_level'] != PROCESS_LEVELS['V3']:
+            if self.stats.npts != len(self.data):
+                raise ValueError(
+                    'Number of points in header does not match the number of '
+                    'points in the data.'
+                )
 
         # are all of the defined standard keys in the standard dictionary?
+        if self.stats.standard['process_level'] == PROCESS_LEVELS['V3']:
+            STANDARD_KEYS.pop('units', None)
         req_keys = set(STANDARD_KEYS.keys())
         std_keys = set(list(self.stats.standard.keys()))
         if not req_keys <= std_keys:
@@ -370,7 +361,6 @@ class StationTrace(Trace):
         provdict = {'prov_id': prov_id,
                     'prov_attributes': prov_attributes}
         self.provenance.append(provdict)
-        self.validate()
 
     def getAllProvenance(self):
         """Get internal list of processing history.
@@ -636,7 +626,11 @@ def _stats_from_inventory(data, inventory, channelid):
     if standard['source_format'] is None:
         standard['source_format'] = 'fdsn'
 
-    standard['units_type'] = get_units_type(channelid)
+    standard['units'] = ''
+    if channelid[1] == 'N':
+        standard['units'] = 'acc'
+    else:
+        standard['units'] = 'vel'
 
     if len(channel.comments):
         comments = ' '.join(

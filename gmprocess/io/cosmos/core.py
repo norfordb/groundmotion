@@ -18,7 +18,7 @@ from gmprocess.constants import UNIT_CONVERSIONS
 from gmprocess.exception import GMProcessException
 from gmprocess.stationstream import StationStream
 from gmprocess.stationtrace import StationTrace, TIMEFMT, PROCESS_LEVELS
-from gmprocess.io.seedname import get_channel_name, get_units_type
+from gmprocess.io.seedname import get_channel_name
 
 MICRO_TO_VOLT = 1e6  # convert microvolts to volts
 MSEC_TO_SEC = 1 / 1000.0
@@ -26,7 +26,10 @@ TEXT_HDR_ROWS = 14
 VALID_MARKERS = [
     'CORRECTED ACCELERATION',
     'UNCORRECTED ACCELERATION',
-    'RAW ACCELERATION COUNTS'
+    'RAW ACCELERATION COUNTS',
+    'VELOCITY DATA',
+    'DISPLACEMENT DATA',
+    'RESPONSE SPECTRA'
 ]
 
 code_file = pkg_resources.resource_filename('gmprocess', 'data/fdsn_codes.csv')
@@ -222,11 +225,12 @@ def read_cosmos(filename, **kwargs):
     stream = StationStream([])
     while line_offset < line_count:
         trace, line_offset = _read_channel(
-            filename, line_offset, location=location)
+            filename, line_offset, line_count, location=location)
         # store the trace if the station type is in the valid_station_types
         # list or store the trace if there is no valid_station_types list
         if valid_station_types is not None:
-            if trace.stats['format_specific']['station_code'] in valid_station_types:
+            if trace.stats['format_specific']['station_code'] in \
+                 valid_station_types:
                 stream.append(trace)
         else:
             stream.append(trace)
@@ -234,7 +238,7 @@ def read_cosmos(filename, **kwargs):
     return [stream]
 
 
-def _read_channel(filename, line_offset, location=''):
+def _read_channel(filename, line_offset, line_count, location=''):
     """Read channel data from COSMOS V1/V2 text file.
 
     Args:
@@ -273,8 +277,22 @@ def _read_channel(filename, line_offset, location=''):
     hdr['standard']['source_file'] = tail or os.path.basename(head)
 
     # read in the data
+    if hdr['standard']['process_level'] == PROCESS_LEVELS['V3']:
+        skiprows += 1
     nrows, data = _read_lines(skiprows, filename)
-
+    if hdr['standard']['process_level'] == PROCESS_LEVELS['V3']:
+        trace = StationTrace(data.copy(), Stats(hdr.copy()))
+        skiprows += nrows + 1
+        while skiprows < (line_count - 1):
+            nrows, data = _read_lines(skiprows, filename)
+            skiprows += nrows + 1
+            newData = data.copy()
+            mergeData = [trace.data, newData]
+            trace.data = np.concatenate(mergeData)
+    # XXX XXX XXX
+    # NOTE FROM ISTI: removed this accomodation because the spec is clear
+    # enough and data files not in accordance with the spec should be changed,
+    # not the applications that obey the spec
     # Check for "off-by-one" problem that sometimes occurs with cosmos data
     # Notes:
     #     - We cannot do this check inside _get_header_info because we don't
@@ -284,9 +302,9 @@ def _read_channel(filename, line_offset, location=''):
     #       different convention is used where the "length" of the record is
     #       actually is actuation (npts-1)*dt. In this case, we need to
     #       recompute duration and npts
-    if hdr['npts'] == (len(data) - 1):
-        hdr['npts'] = len(data)
-        hdr['duration'] = (hdr['npts'] - 1) * hdr['delta']
+    # if hdr['npts'] == (len(data) - 1):
+    #    hdr['npts'] = len(data)
+    #    hdr['duration'] = (hdr['npts'] - 1) * hdr['delta']
 
     # check units
     unit = hdr['format_specific']['physical_units']
@@ -294,18 +312,18 @@ def _read_channel(filename, line_offset, location=''):
         data *= UNIT_CONVERSIONS[unit]
         logging.debug('Data converted from %s to cm/s/s' % (unit))
     else:
-        if unit != 'counts':
+        if (unit != 'counts') and (hdr['standard']['process_level'] !=
+                                   PROCESS_LEVELS['V3']):
             raise GMProcessException(
                 'COSMOS: %s is not a supported unit.' % unit)
 
-    if hdr['standard']['units'] != 'acc':
-        raise GMProcessException('COSMOS: Only acceleration data accepted.')
-
-    trace = StationTrace(data.copy(), Stats(hdr.copy()))
+    if hdr['standard']['process_level'] != PROCESS_LEVELS['V3']:
+        trace = StationTrace(data.copy(), Stats(hdr.copy()))
 
     # record that this data has been converted to g, if it has
     if hdr['standard']['process_level'] != PROCESS_LEVELS['V0']:
-        response = {'input_units': 'counts', 'output_units': 'cm/s^2'}
+        response = {'input_units': 'counts',
+                    'output_units': hdr['format_specific']['physical_units']}
         trace.setProvenance('remove_response', response)
 
     # set new offset
@@ -340,6 +358,7 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
       - process_time (datetime): Reported date of processing
       - process_level: Either 'V0', 'V1', 'V2', or 'V3'
       - station_name (str): Long form station description
+      - channel_name (str): channel name as per header
       - sensor_serial_number (str): Reported sensor serial
       - instrument (str): See SENSOR_TYPES
       - comments (str): Processing comments
@@ -372,6 +391,8 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
       - scaling_factor (float): Scaling used for converting acceleration
             from g/10 to cm/s/s
       - sensor_sensitivity (float): Sensitvity in volts/g
+      - nperiods (int): number of periods for which V3 response spectra are
+            provided
 
     Args:
         int_data (ndarray): Array of integer data
@@ -443,7 +464,8 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
                     is_vertical=True,
                     is_north=False)
 
-                horizontal_angle = 360.0  # Obspy cannot have this value exceed 360
+                # Obspy cannot have this value exceed 360
+                horizontal_angle = 360.0
         elif horizontal_angle >= 0 and horizontal_angle <= 360:
             if (
                 horizontal_angle > 315
@@ -516,7 +538,7 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
     coordinates['elevation'] = float(flt_data[2])
     for key in coordinates:
         if coordinates[key] == unknown:
-            if key != elevation:
+            if key != 'elevation':
                 warnings.warn('Missing %r. Setting to np.nan.' % key, Warning)
                 coordinates[key] = np.nan
             else:
@@ -526,7 +548,6 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
     hdr['coordinates'] = coordinates
 
     # standard metadata
-    standard['units_type'] = get_units_type(channel)
     standard['source'] = source
     standard['horizontal_orientation'] = horizontal_orientation
     station_name = lines[4][40:-1].strip()
@@ -603,6 +624,7 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
             standard['units'] = 'disp'
     standard['source_format'] = 'cosmos'
     standard['comments'] = ', '.join(cmt_data)
+    standard['channel_name'] = int_data[49]
 
     # format specific metadata
     if physical_parameter in PHYSICAL_UNITS:
@@ -660,6 +682,11 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
     scaling_factor = float(flt_data[41])
     format_specific['sensor_sensitivity'] = _check_assign(
         scaling_factor, unknown, np.nan)
+
+    # for V3 files, set a field called nperiods
+    if standard['process_level'] == PROCESS_LEVELS['V3']:
+        nperiods = int(int_data[69])
+        format_specific['nperiods'] = nperiods
 
     # for V0 files, set a standard field called instrument_sensitivity
     ctov = least_significant_bit / MICRO_TO_VOLT
