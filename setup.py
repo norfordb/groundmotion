@@ -28,12 +28,11 @@ ext_modules = [
 
 setup(
     name='gmprocess',
-    description='USGS ShakeMap Ground Motion Processing Tools',
+    description='ISTI fork of USGS ShakeMap Ground Motion Processing Tools',
     include_package_data=True,
-    author='Mike Hearne, Heather Schovanec, John, Rekoske, Eric Thompson',
-    author_email=('mhearne@usgs.gov, hschovanec@usgs.gov, '
-                  'jrekoske@usgs.gov, emthompson@usgs.gov'),
-    url='https://github.com/usgs/groundmotion-processing',
+    author='Alexander Schnackenberg',
+    author_email=('a.schnackenberg@isti.com'),
+    url='https://github.com/alexanderschnackenberg/groundmotion-processing',
     version=versioneer.get_version(),
     mdclass=versioneer.get_cmdclass(),
     packages=[

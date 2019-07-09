@@ -1,0 +1,36 @@
+{% set version = "v0.1.8" %}
+
+package:
+        name: gmprocess
+        version: {{ version }}
+
+source:
+        url: https://github.com/alexanderschnackenberg/groundmotion-processing/groundmotion-processing-{{ version }}.tar.gz
+
+build:
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --no-deps -vv"
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+  host:
+    - python >=3.6
+    - cython
+    - numpy
+    - pip
+  run:
+    - configobj
+    - impactutils
+    - lxml
+    - obspy
+    - openpyxl
+    - python >=3.6
+    - pyyaml
+    - requests
+    - vcrpy
+    - {{ pin_compatible('numpy') }}
+
+test:
+  imports:
+    - gmprocess
