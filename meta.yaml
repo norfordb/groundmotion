@@ -1,4 +1,4 @@
-{% set version = "v0.1.8" %}
+{% set version = "isti_v0.2.1" %}
 
 package:
         name: gmprocess
