@@ -355,6 +355,7 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
       - horizontal_orientation (float): Rotation from north (degrees)
       - instrument_period (float): Period of sensor (Hz)
       - instrument_damping (float): Fraction of critical
+      - origin_time (datetime): Reported origin time of event (if applicable)      
       - process_time (datetime): Reported date of processing
       - process_level: Either 'V0', 'V1', 'V2', or 'V3'
       - station_name (str): Long form station description
@@ -558,29 +559,48 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
     instrument_damping = float(flt_data[40])
     standard['instrument_damping'] = _check_assign(instrument_damping,
                                                    unknown, np.nan)
-    process_line = lines[10][10:40]
-    if process_line.find('-') >= 0 or process_line.find('/') >= 0:
-        if process_line.find('-') >= 0:
-            delimeter = '-'
-        elif process_line.find('/') >= 0:
-            delimeter = '/'
-        try:
-            date = process_line.split(delimeter)
-            month = int(date[0][-2:])
-            day = int(date[1])
-            year = int(date[2][:4])
-            time = process_line.split(':')
-            hour = int(time[0][-2:])
-            minute = int(time[1])
-            second = float(time[2][:2])
-            microsecond = int((second - int(second)) * 1e6)
-            etime = datetime(year, month, day, hour, minute,
-                             int(second), microsecond)
-            standard['process_time'] = etime.strftime(TIMEFMT)
-        except Exception:
-            standard['process_time'] = ''
-    else:
+#finds the delimiter used for the string and splits it appropriately
+#used for processing date/times
+#could be moved up to be used elsewhere
+    def delimiter(line): 
+        delimiter = None
+        for dlim in ['-', '/', ':']:
+            if line.find(dlim) >= 0:
+                delimiter = dlim
+        return(line.split(delimiter))
+
+    origin_line = lines[3][8:41]
+    try:
+        ols = origin_line.split()
+        date = delimiter(ols[0])
+        time = delimiter(ols[1])
+        year = int(date[0])
+        month = int(date[1])
+        day = int(date[2])
+        hour = int(time[0])
+        minute = int(time[1])
+        second = int(time[2])
+        otime = datetime(year, month, day, hour, minute, second)
+        standard['origin_time'] = otime.strftime(TIMEFMT)
+    except Exception:
+        standard['origin_time'] = ''
+    process_line = lines[10][10:40] #this loop of code didn't work with the
+                                #time formats I found in the given V2C files
+    try:
+        pls = process_line.split()
+        date = delimiter(pls[0])
+        time = delimiter(pls[1])
+        year = int(date[0])
+        month = int(date[1])
+        day = int(date[2])
+        hour = int(time[0])
+        minute = int(time[1])
+        second = int(time[2])
+        ptime = datetime(year, month, day, hour, minute, second)
+        standard['process_time'] = ptime.strftime(TIMEFMT)
+    except Exception:
         standard['process_time'] = ''
+
     process_level = int(int_data[0])
     if process_level == 0:
         standard['process_level'] = PROCESS_LEVELS['V0']
@@ -758,3 +778,8 @@ def _read_lines(skip_rows, filename):
                                  max_rows=num_lines, dtype=np.float64,
                                  delimiter=widths).flatten()
     return num_lines, data_arr
+
+
+#/home/ben/cesmd-plotting-tool/V2Files/NP286--n.2000gdtw.HNE.00.acc.V2c
+
+read_cosmos("/home/ben/cesmd-plotting-tool/V2Files/NP286--n.2000gdtw.HNE.00.acc.V2c")
