@@ -574,17 +574,18 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
         ols = origin_line.split()
         date = delimiter(ols[0])
         time = delimiter(ols[1])
+        zone = ols[2]
         year = int(date[0])
         month = int(date[1])
         day = int(date[2])
         hour = int(time[0])
         minute = int(time[1])
-        second = int(time[2])
+        second = int(time[2][:2])
         otime = datetime(year, month, day, hour, minute, second)
         standard['origin_time'] = otime.strftime(TIMEFMT)
     except Exception:
         standard['origin_time'] = ''
-    process_line = lines[10][10:40] #this loop of code didn't work with the
+    process_line = lines[10][10:40] #the previous code didn't work with the
                                 #time formats I found in the given V2C files
     try:
         pls = process_line.split()
@@ -778,8 +779,3 @@ def _read_lines(skip_rows, filename):
                                  max_rows=num_lines, dtype=np.float64,
                                  delimiter=widths).flatten()
     return num_lines, data_arr
-
-
-#/home/ben/cesmd-plotting-tool/V2Files/NP286--n.2000gdtw.HNE.00.acc.V2c
-
-read_cosmos("/home/ben/cesmd-plotting-tool/V2Files/NP286--n.2000gdtw.HNE.00.acc.V2c")
