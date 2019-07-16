@@ -1,0 +1,7 @@
+meta.yaml controls build process.
+
+Steps:
+
+1) conda activate <CONDA_ENV>
+
+2) conda build 
