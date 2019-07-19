@@ -1,11 +1,11 @@
-{% set version = "isti_v0.2.2" %}
+{% set version = "isti_v0.2.4" %}
 
 package:
         name: gmprocess
         version: {{ version }}
 
 source:
-        url: https://github.com/alexanderschnackenberg/groundmotion-processing/archive/{{ version }}.tar.gz
+        url: https://github.com/norfordb/groundmotion/release/{{ version }}.tar.gz
 
 build:
   number: 0
