@@ -436,6 +436,9 @@ def _get_header_info(int_data, flt_data, lines, cmt_data, location=''):
     hdr['station'] = lines[4][28:34].strip()
     logging.debug('station: %s' % hdr['station'])
     horizontal_angle = int(int_data[53])
+    if horizontal_angle == unknown and int(int_data[54]) != unknown:
+        horizontal_angle = int(int_data[54])
+
     logging.debug('horizontal_angle: %s' % horizontal_angle)
     if horizontal_angle not in VALID_AZIMUTH_INTS:
         logging.warning("Horizontal_angle in COSMOS header is not valid.")
